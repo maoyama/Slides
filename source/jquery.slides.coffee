@@ -27,6 +27,7 @@
 (($, window, document) ->
   pluginName = "slidesjs"
   defaults =
+    finity: false
     width: 940
       # Set the default width of the slideshow.
     height: 528
@@ -273,6 +274,16 @@
     # Slides has loaded
     @options.callback.loaded(@options.start)
 
+  Plugin::_isFirst = ->
+    if @data.current == 0
+      return true
+    return false
+
+  Plugin::_isLast = ->
+    if @data.total == @data.current + 1
+      return true
+    return false
+
   # @_setActive()
   # Sets the active slide in the pagination
   Plugin::_setActive = (number) ->
@@ -314,8 +325,12 @@
   # @next()
   # Next mechanics
   Plugin::next = (effect) ->
-    $element = $(@element)
     @data = $.data this
+    # finity
+    if @options.finity && @_isLast()
+      return
+
+    $element = $(@element)
 
     # Set the direction
     $.data this, "direction", "next"
@@ -327,8 +342,12 @@
   # @previous()
   # Previous mechanics
   Plugin::previous = (effect) ->
-    $element = $(@element)
     @data = $.data this
+    # finity
+    if @options.finity && @_isFirst()
+      return
+
+    $element = $(@element)
 
     # Set the direction
     $.data this, "direction", "previous"
@@ -363,8 +382,9 @@
   # @_setuptouch()
   # Setup slideshow for touch
   Plugin::_setuptouch = () ->
-    $element = $(@element)
     @data = $.data this
+
+    $element = $(@element)
 
     # Define slides control
     slidesControl = $(".slidesjs-control", $element)
@@ -378,19 +398,23 @@
     next = 0 if next > @data.total - 1
 
     # By default next/prev slides are hidden, show them when on touch device
-    slidesControl.children(":eq(" + next + ")").css
-      display: "block"
-      left: @options.width
 
-    slidesControl.children(":eq(" + previous + ")").css
-      display: "block"
-      left: -@options.width
+    if !@options.finity || !@_isLast() 
+      slidesControl.children(":eq(" + next + ")").css
+        display: "block"
+        left: @options.width
+    if !@options.finity || !@_isFirst()
+      slidesControl.children(":eq(" + previous + ")").css
+        display: "block"
+        left: -@options.width
 
   # @_touchstart()
   # Start touch
   Plugin::_touchstart = (e) ->
-    $element = $(@element)
     @data = $.data this
+
+    $element = $(@element)
+
     touches = e.originalEvent.touches[0]
 
     # Setup the next and previous slides for swiping
@@ -409,8 +433,9 @@
   # @_touchend()
   # Animates the slideshow when touch is complete
   Plugin::_touchend = (e) ->
-    $element = $(@element)
     @data = $.data this
+    $element = $(@element)
+
     touches = e.originalEvent.touches[0]
 
     # Define slides control
@@ -418,14 +443,20 @@
 
     # Slide has been dragged to the right, goto previous slide
     if slidesControl.position().left > @options.width * 0.5 || slidesControl.position().left > @options.width * 0.1 && (Number(new Date()) - @data.touchtimer < 250)
-      $.data this, "direction", "previous"
-      @_slide()
+      if @options.finity && @_isFirst() 
+        @_back(slidesControl)
+      else
+        $.data this, "direction", "previous"
+        @_slide()
     # Slide has been dragged to the left, goto next slide
     else if slidesControl.position().left < -(@options.width * 0.5) || slidesControl.position().left < -(@options.width * 0.1) && (Number(new Date()) - @data.touchtimer < 250)
-      $.data this, "direction", "next"
-      @_slide()
+      if @options.finity && @_isLast()
+        @_back(slidesControl)
+      else
+        $.data this, "direction", "next"
+        @_slide()
     else
-      # Slide has not been dragged far enough, animate back to 0 and reset
+        # Slide has not been dragged far enough, animate back to 0 and reset
         # Get the browser's vendor prefix
         prefix = @data.vendorPrefix
 
@@ -455,6 +486,21 @@
 
     # Stop event from bubbling up
     e.stopPropagation()
+
+  Plugin::_back = (slidesControl) ->
+    # Slide has not been dragged far enough, animate back to 0 and reset
+    # Get the browser's vendor prefix
+    prefix = @data.vendorPrefix
+
+    # Create CSS3 styles based on vendor prefix
+    transform = prefix + "Transform"
+    duration = prefix + "TransitionDuration"
+    timing = prefix + "TransitionTimingFunction"
+
+    # Set CSS3 styles
+    slidesControl[0].style[transform] = "translateX(0px)"
+    slidesControl[0].style[duration] = @options.effect.slide.speed * 0.85 + "ms"
+
 
   # @_touchmove()
   # Moves the slide on touch
@@ -516,7 +562,7 @@
         # Stop/pause slideshow on mouse enter
         slidesContainer.bind "mouseenter", =>
           clearTimeout @data.restartDelay
-					$.data this, "restartDelay", null
+          $.data this, "restartDelay", null
           @stop()
 
         # Play slideshow on mouse leave
